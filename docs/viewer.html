@@ -89,9 +89,10 @@
                 for (var i = 0; i < sensorSettings.length; i++) {
                     var setting = sensorSettings[i];
 
-                    if (setting.topic != null) {
+                    if (setting.topic == topic) {
                         setting.uvi = uvi;
                         setting.humidity = humidity;
+                        console.log(uvi + "," + humidity)
                     }
                 }
 
