@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <!-- Latest compiled and minified CSS -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+    <link rel="stylesheet" href="css/base.css">
+    <script src="https://cdn.mlkcca.com/v0.6.0/milkcocoa.js"></script>
+    <script src="https://code.createjs.com/createjs-2015.11.26.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+    <script>
+        // 読み込みが終わってから初期化
+        window.addEventListener("load", init);
+
+        // パラメータ
+        var mapSize = 700;
+        var faceSize = 380;
+        var textSize = 380;
+
+        // センサーの円の大きさ
+        var sensorSize = 30;
+
+        // センサーの描画の色彩
+        var colors = {
+            purple: "#cdcdfc",
+            pink: "#edcaff",
+            blue: "#a0d5f9",
+            alpha: 0.8
+        };
+
+        // 描画位置 x,y はマップ上の割合を入力
+        var sensorSettings = [{
+            topic: "Omron/Env/C4:18:A9:F5:B3:99",
+            x: 0.5,
+            y: 0.5,
+
+        }, {
+            topic: "Omron/Env/EA:FE:72:97:57:B7",
+            x: 0.4,
+            y: 0.4,
+
+        }, {
+            topic: "Omron/Env/D0:7D:8E:AC:94:32",
+            x: 0.6,
+            y: 0.6,
+
+        }]
+
+        /*
+         * センサーの読み込み
+         */
+
+        function init() {
+            milkcocoa = new MilkCocoa.connectWithApiKey('teaix6xae7c.mlkcca.com', 'JKKHFNMFBCALOPDF', 'DchkjkhnbdajCfnEPlmeIWFSJBXNhYCDXPbKXiGk');
+            ds = milkcocoa.dataStore('EnvData');
+
+            ds.stream().size(100 * sensorSettings.length).next(function(err, data) {
+                parse(data);
+                jQuery("#loading").fadeOut(500);
+                sensorInit();
+            });
+        };
+
+        function parse(data) {
+            var tmp = {};
+            for (var i = 0; i < data.length; i++) {
+                var sensor = data[i].value;
+                var topic = sensor.topic;
+                var datetime = Date.parse(sensor.datetime);
+                sensor.datetime = datetime;
+
+                if (tmp[topic] == undefined) {
+                    tmp[topic] = new Array();
+                }
+                tmp[topic].push(sensor);
+            }
+            // 移動平均を作る
+            for (var topic in tmp) {
+                var uvi = 0;
+                var humidity = 0;
+                for (var i = 0; i < tmp[topic].length; i++) {
+                    uvi += tmp[topic][i].UVI;
+                    humidity += tmp[topic][i].humidity;
+                }
+                uvi /= tmp[topic].length;
+                humidity /= tmp[topic].length;
+                for (var i = 0; i < sensorSettings.length; i++) {
+                    var setting = sensorSettings[i];
+
+                    if (setting.topic != null) {
+                        setting.uvi = uvi;
+                        setting.humidity = humidity;
+                    }
+                }
+
+            }
+
+        }
+
+        function sensorInit() {
+            // ステージを作成、マウスオーバーを有効に
+            var stage = new createjs.Stage("Viewer");
+
+            var mapContainer = new createjs.Container();
+            var map = new createjs.Bitmap("./img/map.png");
+            mapContainer.x = 1280 * 0.35;
+            mapContainer.y = 70;
+            // 大きさは固定
+            map.scaleX = map.scaleY = mapSize / 835;
+            mapContainer.addChild(map);
+            // センサーを追加
+            var sensors = [];
+
+            for (var i = 0; i < sensorSettings.length; i++) {
+                var setting = sensorSettings[i];
+                var sensor = new createjs.Shape();
+                var x = setting.x * mapSize;
+                var y = setting.y * mapSize;
+
+                sensor.graphics.beginFill("#cdcdfc").drawCircle(0, 0, sensorSize);
+                sensor.x = x;
+                sensor.y = y;
+                sensor.alpha = colors.alpha;
+                sensor.setting = setting;
+                sensors[i] = sensor;
+
+
+                // Tween
+                var tween = createjs.Tween.get(sensor, {
+                        loop: true
+                    })
+                    .to({
+                        scaleX: 1.05,
+                        scaleY: 1.05,
+                        //alpha: 0
+                    }, 1000)
+                    .to({
+                        scaleX: 1.0,
+                        scaleY: 1.0,
+                        //alpha: 0
+                    }, 500)
+                mapContainer.addChild(sensor);
+
+                // テキストを表示
+                console.log(setting);
+                var t = new createjs.Text("紫外線: " + setting.uvi.toFixed(2) + "\n湿度: "　 + setting.humidity.toFixed(1), "8px gothic", "black");
+                t.x = x;
+                t.y = y;
+                t.textBaseline = "middle";
+                t.textAlign = "center";
+                mapContainer.addChild(t);
+            }
+
+
+
+            var text = new createjs.Bitmap("./img/text.png");
+            text.scaleX = text.scaleY = textSize / 445;
+            text.x = 70;
+            text.y = 60;
+
+            var facesContainer = new createjs.Container();
+            var faces = new createjs.Bitmap("./img/faces.png");
+            faces.scaleX = faces.scaleY = faceSize / 445;
+            facesContainer.x = 70;
+            facesContainer.y = text.y + 240;
+            facesContainer.addChild(faces);
+
+
+
+            // オブジェクトの作成
+            stage.addChild(mapContainer);
+            stage.addChild(text);
+            stage.addChild(facesContainer);
+            // tick イベントを登録する
+            createjs.Ticker.addEventListener("tick", handleTick);
+
+            function handleTick(event) {
+                for (var senser in sensors) {
+                    // マウス座標のローカル座標を求める
+                    var point = sensor.globalToLocal(stage.mouseX, stage.mouseY);
+                    var isHit = sensor.hitTest(point.x, point.y);
+
+                    if (isHit) {
+
+                    } else {
+
+                    }
+
+
+                }
+                // 画面を更新する
+                stage.update();
+            }
+
+            // windowのリサイズ設定
+            var id;
+            $(window).on('resize', function(e) {
+                clearTimeout(id);
+                id = setTimeout(function() {
+                    stage.canvas.width = $(e.target).width();
+                    stage.canvas.height = $(e.target).height();
+                }, 100);
+            });
+            $(window).trigger('resize');
+        }
+    </script>
+</head>
+
+<body>
+    <header>
+        <nav class="navbar navbar-inverse navbar-fixed-top">
+            <div class="container">
+                <div class="navbar-header">
+                    <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+                    <a class="navbar-brand" href="#">Project name</a>
+                </div>
+                <div id="navbar" class="collapse navbar-collapse">
+                    <ul class="nav navbar-nav">
+                        <li class="active"><a href="#">Home</a></li>
+                        <li><a href="#about">About</a></li>
+                        <li><a href="#contact">Contact</a></li>
+                    </ul>
+                </div>
+                <!--/.nav-collapse -->
+            </div>
+        </nav>
+    </header>
+    <div class="container">
+        <div id="loading"><img src="img/gif-load.gif"></div>
+        <canvas id="Viewer" width="1280" height="1024"></canvas>
+    </div>
+    <footer>
+        <div class="footer"></div>
+    </footer>
+</body>
+
+</html>
