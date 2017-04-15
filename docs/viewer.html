@@ -30,6 +30,8 @@
             alpha: 0.8
         };
 
+        var selected = null;
+
         // 描画位置 x,y はマップ上の割合を入力
         var sensorSettings = [{
             topic: "Omron/Env/C4:18:A9:F5:B3:99",
@@ -103,13 +105,15 @@
         function sensorInit() {
             // ステージを作成、マウスオーバーを有効に
             var stage = new createjs.Stage("Viewer");
-
+            stage.enableMouseOver();
             var mapContainer = new createjs.Container();
             var map = new createjs.Bitmap("./img/map.png");
             mapContainer.x = 1280 * 0.35;
             mapContainer.y = 70;
             // 大きさは固定
             map.scaleX = map.scaleY = mapSize / 835;
+
+
             mapContainer.addChild(map);
             // センサーを追加
             var sensors = [];
@@ -127,6 +131,26 @@
                 sensor.setting = setting;
                 sensors[i] = sensor;
 
+                // 選択時の挙動
+                sensor.on("click", function(evt) {
+                    // グラフを表示
+                }, sensor, false);
+
+                // マウスオーバーの挙動
+                sensor.on("mouseover", function(evt) {
+                    this.graphics.clear();
+                    this.graphics.beginStroke("#a0d5f9");
+                    this.graphics.setStrokeStyle(5);
+                    this.graphics.beginFill("#cdcdfc").drawCircle(0, 0, sensorSize);
+                    selected = this;
+                }, sensor, false);
+
+                // 選択時の挙動
+                sensor.on("mouseout", function(evt) {
+                    this.graphics.clear();
+                    this.graphics.beginFill("#cdcdfc").drawCircle(0, 0, sensorSize);
+                    selected = null;
+                }, sensor, false);
 
                 // Tween
                 var tween = createjs.Tween.get(sensor, {
@@ -167,6 +191,24 @@
             facesContainer.x = 70;
             facesContainer.y = text.y + 240;
             facesContainer.addChild(faces);
+            // Faceに表示するインジケーター
+            var circle = new createjs.Shape();
+            circle.on("tick", function(evt) {
+                this.graphics.clear();
+                if (selected != null) {
+                    var setting = selected.setting;
+                    var uvi = setting.uvi;
+                    var himidity = setting.humidity;
+                    // TODO　本当は吹き出し
+                    this.graphics.beginStroke("#eeeeee");
+                    this.graphics.setStrokeStyle(2);
+                    this.graphics.beginFill("#ffffff").drawCircle(0, 0, 10);
+                    this.x = 100 + 4 * himidity;
+                    this.y = 100 + 200 * uvi;
+                }
+            }, circle, false);
+
+            facesContainer.addChild(circle);
 
 
 
@@ -178,19 +220,11 @@
             createjs.Ticker.addEventListener("tick", handleTick);
 
             function handleTick(event) {
-                for (var senser in sensors) {
-                    // マウス座標のローカル座標を求める
-                    var point = sensor.globalToLocal(stage.mouseX, stage.mouseY);
-                    var isHit = sensor.hitTest(point.x, point.y);
 
-                    if (isHit) {
-
-                    } else {
-
-                    }
+                // もし選択中のオブジェクトがあれば、マップに表示
 
 
-                }
+
                 // 画面を更新する
                 stage.update();
             }
